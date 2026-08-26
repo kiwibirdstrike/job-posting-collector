@@ -4,6 +4,7 @@
   "private": false,
   "type": "module",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "collect": "tsx scripts/collect.ts",
