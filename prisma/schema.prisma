@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model JobPosting {
+  id              String   @id @default(cuid())
+  source          String   @default("manual")
+  sourcePostingId String?
+  url             String?
+  title           String
+  company         String
+  location        String?
+  employmentType  String?
+  experienceLevel String?
+  deadline        DateTime?
+  postedAt        DateTime?
+  collectedAt     DateTime @default(now())
+  description     String?
+  tags            String   @default("[]")
+  status          String   @default("new")
+  checked         Boolean  @default(false)
+  rawPayload      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([source, sourcePostingId])
+  @@unique([url])
+  @@index([deadline])
+  @@index([source])
+}

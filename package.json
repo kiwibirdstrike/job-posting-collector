@@ -4,12 +4,28 @@
   "private": false,
   "type": "module",
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
     "collect": "tsx scripts/collect.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:push": "prisma db push",
+    "prisma:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "better-sqlite3": "^12.11.1",
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "prisma": "^7.8.0",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"

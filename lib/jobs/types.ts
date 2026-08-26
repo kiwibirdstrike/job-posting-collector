@@ -10,12 +10,6 @@ export const JOB_STATUSES = [
   "ignored"
 ] as const;
 
-declare global {
-  interface RequestInit {
-    next?: { revalidate?: number };
-  }
-}
-
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
 export type JobCandidate = {
