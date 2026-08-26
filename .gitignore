@@ -1,0 +1,16 @@
+.next/
+.runtime/
+node_modules/
+coverage/
+dist/
+.env
+.env.local
+dev.db
+dev.db-journal
+*.tsbuildinfo
+jobs.json
+*.jobs.json
+.DS_Store
+개인 페이지 & 공유된 페이지/
+개인 페이지 & 공유된 페이지 2/
+개인 페이지 & 공유된 페이지_3/

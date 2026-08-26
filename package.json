@@ -1,0 +1,17 @@
+{
+  "name": "job-posting-collector",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "collect": "tsx scripts/collect.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
