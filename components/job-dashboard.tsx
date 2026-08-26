@@ -1,12 +1,20 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { collectJobs } from "@/app/actions";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { startCollection } from "@/app/actions";
 
 export type JobView = {
   id: string; title: string; company: string; source: string; sourcePostingId: string | null;
   url: string | null; location: string | null; experienceLevel: string | null; employmentType: string | null;
   deadline: string | null; collectedAt: string; description: string | null; tags: string[];
+};
+
+type CollectionRun = {
+  id: string;
+  status: "running" | "completed" | "failed";
+  summary: string | null;
+  logs: Array<{ id: string; message: string; at: string }>;
 };
 
 function dateLabel(value: string | null): string {
@@ -18,16 +26,39 @@ export function JobDashboard({ initialJobs }: { initialJobs: JobView[] }) {
   const [source, setSource] = useState("all");
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
+  const [run, setRun] = useState<CollectionRun | null>(null);
+  const router = useRouter();
   const sources = useMemo(() => Array.from(new Set(initialJobs.map((job) => job.source))).sort(), [initialJobs]);
   const jobs = useMemo(() => initialJobs.filter((job) => {
     const haystack = [job.title, job.company, job.location, job.description, ...job.tags].filter(Boolean).join(" ").toLowerCase();
     return (!query || haystack.includes(query.toLowerCase())) && (source === "all" || job.source === source);
   }), [initialJobs, query, source]);
 
+  useEffect(() => {
+    if (!run?.id || run.status !== "running") return;
+    const poll = async () => {
+      const response = await fetch(`/api/collection-runs/${run.id}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const nextRun = await response.json() as CollectionRun;
+      setRun(nextRun);
+      if (nextRun.status !== "running") {
+        setMessage(nextRun.summary ?? "수집이 종료되었습니다.");
+        router.refresh();
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 800);
+    return () => window.clearInterval(timer);
+  }, [run?.id, run?.status, router]);
+
   function runCollection() {
     startTransition(async () => {
       setMessage("수집 중입니다...");
-      try { setMessage(await collectJobs()); } catch (error) { setMessage(error instanceof Error ? error.message : "수집에 실패했습니다."); }
+      try {
+        const result = await startCollection();
+        setMessage(result.message ?? "수집을 시작했습니다.");
+        setRun(result.run as CollectionRun);
+      } catch (error) { setMessage(error instanceof Error ? error.message : "수집에 실패했습니다."); }
     });
   }
 
@@ -42,6 +73,10 @@ export function JobDashboard({ initialJobs }: { initialJobs: JobView[] }) {
       <strong>{jobs.length}<span>건 표시</span></strong>
     </section>
     {message && <p className="notice" role="status">{message}</p>}
+    {run?.status === "running" && <section className="progress" aria-live="polite">
+      <div className="progress-head"><strong>수집 진행 중</strong><span>로그 {run.logs.length}건</span></div>
+      <div className="progress-log">{run.logs.slice(-8).map((log) => <p key={log.id}>{log.message}</p>)}</div>
+    </section>}
     <section className="grid">{jobs.map((job) => <article className="job" key={job.id}>
       <div className="job-head"><span className="source">{job.source}</span><span className="deadline">{dateLabel(job.deadline)}</span></div>
       <h2>{job.title}</h2><p className="company">{job.company}</p>

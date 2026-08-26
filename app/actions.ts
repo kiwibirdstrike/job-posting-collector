@@ -4,6 +4,13 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { collectJobsFromSearchSources, DEFAULT_JOB_SEARCH_SOURCES, sourcesFromEnv } from "@/lib/jobs/collectors/feed";
 import { planIngestion } from "@/lib/jobs/ingest";
+import {
+  appendJobCollectionRunLog,
+  finishJobCollectionRun,
+  findRecentJobCollectionRun,
+  jobCollectionCooldownMs,
+  startJobCollectionRun
+} from "@/lib/jobs/collection-runs";
 
 function asDate(value: string | null): Date | null {
   if (!value) return null;
@@ -11,12 +18,17 @@ function asDate(value: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export async function collectJobs(): Promise<string> {
+async function collectJobsNow(onProgress?: (message: string) => void): Promise<string> {
+  const configuredSources = sourcesFromEnv(process.env.JOB_SOURCES);
+  const sources = configuredSources.length ? configuredSources : DEFAULT_JOB_SEARCH_SOURCES;
+  onProgress?.(`검색 소스 ${sources.length}개 조회를 준비했습니다.`);
   const candidates = await collectJobsFromSearchSources({
-    sources: sourcesFromEnv(process.env.JOB_SOURCES).length ? sourcesFromEnv(process.env.JOB_SOURCES) : DEFAULT_JOB_SEARCH_SOURCES,
+    sources,
     requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS ?? 12000),
-    sourceConcurrency: Number(process.env.SOURCE_CONCURRENCY ?? 4)
+    sourceConcurrency: Number(process.env.SOURCE_CONCURRENCY ?? 4),
+    onProgress: (event) => onProgress?.(event.message)
   });
+  onProgress?.(`상세 파싱 후보 ${candidates.length}개를 확인했습니다.`);
   const existing = await prisma.jobPosting.findMany({
     select: { id: true, source: true, sourcePostingId: true, url: true, title: true, company: true, deadline: true }
   });
@@ -49,4 +61,29 @@ export async function collectJobs(): Promise<string> {
 
   revalidatePath("/");
   return `수집 완료: 신규 ${plan.creates.length}건, 갱신 ${plan.updates.length}건, 제외 ${plan.skips.length}건`;
+}
+
+async function runCollection(runId: string): Promise<void> {
+  try {
+    const summary = await collectJobsNow((message) => appendJobCollectionRunLog(runId, message));
+    finishJobCollectionRun(runId, "completed", summary);
+  } catch (error) {
+    finishJobCollectionRun(runId, "failed", error instanceof Error ? error.message : "자동 수집에 실패했습니다.");
+  }
+}
+
+export async function startCollection() {
+  const recentRun = findRecentJobCollectionRun();
+  if (recentRun) {
+    const retryAt = new Date(Date.parse(recentRun.startedAt) + jobCollectionCooldownMs);
+    return {
+      runId: null,
+      run: recentRun,
+      message: `최근 12시간 안에 이미 실행했습니다. ${retryAt.toLocaleString("ko-KR")} 이후 다시 실행할 수 있습니다.`
+    };
+  }
+
+  const run = startJobCollectionRun();
+  void runCollection(run.id);
+  return { runId: run.id, run, message: null };
 }
