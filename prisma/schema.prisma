@@ -24,6 +24,7 @@ model JobPosting {
   status          String   @default("new")
   checked         Boolean  @default(false)
   rawPayload      String?
+  notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

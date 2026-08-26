@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { collectJobsFromSearchSources, DEFAULT_JOB_SEARCH_SOURCES, sourcesFromEnv } from "@/lib/jobs/collectors/feed";
 import { planIngestion } from "@/lib/jobs/ingest";
+import { assertStatusTransition } from "@/lib/jobs/status";
+import { JOB_STATUSES, type JobStatus } from "@/lib/jobs/types";
 import {
   appendJobCollectionRunLog,
   finishJobCollectionRun,
@@ -19,11 +21,15 @@ function asDate(value: string | null): Date | null {
 }
 
 async function collectJobsNow(onProgress?: (message: string) => void): Promise<string> {
-  const configuredSources = sourcesFromEnv(process.env.JOB_SOURCES);
+  const configuredSources = sourcesFromEnv(process.env.JOB_SOURCE_URLS ?? process.env.JOB_SOURCES);
   const sources = configuredSources.length ? configuredSources : DEFAULT_JOB_SEARCH_SOURCES;
+  const maxLinksPerSource = process.env.JOB_MAX_LINKS_PER_SOURCE
+    ? Number(process.env.JOB_MAX_LINKS_PER_SOURCE)
+    : undefined;
   onProgress?.(`검색 소스 ${sources.length}개 조회를 준비했습니다.`);
   const candidates = await collectJobsFromSearchSources({
     sources,
+    ...(Number.isFinite(maxLinksPerSource) ? { maxLinksPerSource } : {}),
     requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS ?? 12000),
     sourceConcurrency: Number(process.env.SOURCE_CONCURRENCY ?? 4),
     onProgress: (event) => onProgress?.(event.message)
@@ -86,4 +92,17 @@ export async function startCollection() {
   const run = startJobCollectionRun();
   void runCollection(run.id);
   return { runId: run.id, run, message: null };
+}
+
+export async function updateJobChecked(id: string, checked: boolean) {
+  await prisma.jobPosting.update({ where: { id }, data: { checked, status: checked ? "interested" : "new" } });
+  revalidatePath("/");
+}
+
+export async function updateJobStatus(id: string, nextStatus: JobStatus) {
+  if (!JOB_STATUSES.includes(nextStatus)) throw new Error("Invalid job status");
+  const posting = await prisma.jobPosting.findUniqueOrThrow({ where: { id }, select: { status: true } });
+  const status = assertStatusTransition(posting.status as JobStatus, nextStatus);
+  await prisma.jobPosting.update({ where: { id }, data: { status, checked: status !== "new" && status !== "ignored" } });
+  revalidatePath("/");
 }

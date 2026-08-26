@@ -22,7 +22,7 @@ export default async function Home() {
     sourcePostingId: job.sourcePostingId, url: job.url, location: job.location,
     experienceLevel: job.experienceLevel, employmentType: job.employmentType,
     deadline: job.deadline?.toISOString() ?? null, collectedAt: job.collectedAt.toISOString(),
-    description: job.description, tags: parseList(job.tags)
+    description: job.description, tags: parseList(job.tags), status: job.status, checked: job.checked
   }));
   return <JobDashboard initialJobs={views} />;
 }
