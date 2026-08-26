@@ -7,6 +7,7 @@ import { filterJobsByCompanyScale, type CompanyScaleFilter } from "@/lib/jobs/co
 import { filterJobsByExperience, type JobExperienceFilter } from "@/lib/jobs/experience-filter";
 import { filterJobsByRegion, jobRegionOptions, type JobRegionFilter } from "@/lib/jobs/location-filter";
 import { JOB_STATUSES, type JobStatus } from "@/lib/jobs/types";
+import { collectionProgress } from "@/lib/jobs/collection-progress";
 
 export type JobView = {
   id: string; title: string; company: string; source: string; sourcePostingId: string | null;
@@ -58,6 +59,8 @@ export function JobDashboard({ initialJobs }: { initialJobs: JobView[] }) {
       ? Date.parse(b.collectedAt) - Date.parse(a.collectedAt)
       : (Date.parse(a.deadline ?? "9999-12-31") - Date.parse(b.deadline ?? "9999-12-31")));
   }, [initialJobs, query, source, scale, experience, region, status, sort]);
+  const progress = collectionProgress(run?.logs.map((log) => log.message) ?? []);
+  const isCollecting = isPending || run?.status === "running";
 
   useEffect(() => {
     if (!run?.id || run.status !== "running") return;
@@ -98,7 +101,7 @@ export function JobDashboard({ initialJobs }: { initialJobs: JobView[] }) {
   return <main className="shell">
     <header className="topbar">
       <div><p className="eyebrow">JOB POSTING COLLECTOR</p><h1>채용 공고 대시보드</h1><p className="subtitle">공식 채용 페이지와 채용 포털에서 수집한 공고를 한 곳에서 확인합니다.</p></div>
-      <button className="collect" onClick={runCollection} disabled={isPending}>{isPending ? "수집 중..." : "공고 수집"}</button>
+      <button className="collect" onClick={runCollection} disabled={isCollecting}>{isCollecting ? "수집 중..." : "공고 수집"}</button>
     </header>
     <section className="toolbar" aria-label="공고 필터">
       <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="회사, 직무, 키워드 검색" />
@@ -111,9 +114,10 @@ export function JobDashboard({ initialJobs }: { initialJobs: JobView[] }) {
       <strong>{jobs.length}<span>건 표시</span></strong>
     </section>
     {message && <p className="notice" role="status">{message}</p>}
-    {run?.status === "running" && <section className="progress" aria-live="polite">
-      <div className="progress-head"><strong>수집 진행 중</strong><span>로그 {run.logs.length}건</span></div>
-      <div className="progress-log">{run.logs.slice(-8).map((log) => <p key={log.id}>{log.message}</p>)}</div>
+    {run && <section className={`progress progress-${run.status}`} aria-live="polite">
+      <div className="progress-head"><strong>{run.status === "running" ? "수집 진행 중" : run.status === "completed" ? "수집 완료" : "수집 실패"}</strong><span>{progress.finished}/{progress.total || "?"} 소스 · {progress.percent}% · 로그 {run.logs.length}건</span></div>
+      <div className="progress-track"><span style={{ width: `${run.status === "completed" ? 100 : progress.percent}%` }} /></div>
+      <div className="progress-log">{run.logs.slice(-12).map((log) => <p key={log.id}>{log.message}</p>)}</div>
     </section>}
     <section className="grid">{jobs.map((job) => <article className="job" key={job.id}>
       <div className="job-head"><span className="source">{job.source}</span><span className="deadline">{dateLabel(job.deadline)}</span></div>
